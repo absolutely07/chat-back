@@ -11,7 +11,7 @@ app.use(express.json());
 // База данных
 const db = new sqlite3.Database('chat.db');
 
-// Создаём таблицы
+// Создаём таблицу сообщений
 db.run(`
   CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +49,19 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Очистить все сообщения (только с правильным ключом)
+app.post('/clear', (req, res) => {
+  const { key } = req.body;
+  if (key !== 'supersecret123') {
+    return res.status(403).json({ error: 'Неверный ключ' });
+  }
+  db.run('DELETE FROM messages', (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ success: true, message: 'Все сообщения удалены' });
+  });
+});
+
+// Запуск сервера
 app.listen(port, () => {
   console.log(`Сервер чата запущен на порту ${port}`);
 });
