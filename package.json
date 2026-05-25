@@ -1,7 +1,6 @@
 {
   "name": "chat-backend",
   "version": "1.0.0",
-  "description": "Simple KV store backend for chat",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
