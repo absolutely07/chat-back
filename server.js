@@ -8,7 +8,7 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// Подключение к Supabase через переменные окружения
+// Подключение к Supabase
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_KEY
@@ -21,13 +21,11 @@ app.get('/messages', async (req, res) => {
     .select('*')
     .order('timestamp', { ascending: false })
     .limit(50);
-  
   if (error) return res.status(500).json({ error: error.message });
-  // Отправляем в хронологическом порядке (старые сверху)
   res.json(data.reverse());
 });
 
-// Отправить новое сообщение
+// Отправить сообщение
 app.post('/messages', async (req, res) => {
   const { nickname, text } = req.body;
   if (!text) return res.status(400).json({ error: 'Нет текста' });
@@ -36,9 +34,15 @@ app.post('/messages', async (req, res) => {
     .from('messages')
     .insert([{ nickname: nickname || 'Аноним', text, timestamp: Date.now() }])
     .select();
-  
   if (error) return res.status(500).json({ error: error.message });
   res.json(data[0]);
+});
+
+// Очистить все сообщения (команда /del)
+app.post('/clear-all', async (req, res) => {
+  const { error } = await supabase.from('messages').delete().neq('id', 0);
+  if (error) return res.status(500).json({ error: error.message });
+  res.json({ success: true, message: 'Чат очищен' });
 });
 
 // Заглушка для /presence (если фронт её вызывает)
@@ -51,7 +55,6 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Запуск сервера
 app.listen(port, () => {
   console.log(`Сервер на Supabase запущен на порту ${port}`);
 });
