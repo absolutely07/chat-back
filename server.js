@@ -1,6 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const sqlite3 = require('sqlite3').verbose();
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -8,40 +8,42 @@ const port = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
-// База данных
-const db = new sqlite3.Database('chat.db');
-
-// Создаём таблицу сообщений
-db.run(`
-  CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    nickname TEXT,
-    text TEXT NOT NULL,
-    timestamp INTEGER
-  )
-`);
+// Подключение к Supabase через переменные окружения
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY
+);
 
 // Получить последние 50 сообщений
-app.get('/messages', (req, res) => {
-  db.all('SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50', (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows.reverse());
-  });
+app.get('/messages', async (req, res) => {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .order('timestamp', { ascending: false })
+    .limit(50);
+  
+  if (error) return res.status(500).json({ error: error.message });
+  // Отправляем в хронологическом порядке (старые сверху)
+  res.json(data.reverse());
 });
 
-// Отправить сообщение
-app.post('/messages', (req, res) => {
+// Отправить новое сообщение
+app.post('/messages', async (req, res) => {
   const { nickname, text } = req.body;
   if (!text) return res.status(400).json({ error: 'Нет текста' });
 
-  db.run(
-    'INSERT INTO messages (nickname, text, timestamp) VALUES (?, ?, ?)',
-    [nickname || 'Аноним', text, Date.now()],
-    function(err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ id: this.lastID, success: true });
-    }
-  );
+  const { data, error } = await supabase
+    .from('messages')
+    .insert([{ nickname: nickname || 'Аноним', text, timestamp: Date.now() }])
+    .select();
+  
+  if (error) return res.status(500).json({ error: error.message });
+  res.json(data[0]);
+});
+
+// Заглушка для /presence (если фронт её вызывает)
+app.post('/presence', (req, res) => {
+  res.json({ status: 'ok' });
 });
 
 // Проверка здоровья
@@ -49,19 +51,7 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Очистить все сообщения (только с правильным ключом)
-app.post('/clear', (req, res) => {
-  const { key } = req.body;
-  if (key !== 'supersecret123') {
-    return res.status(403).json({ error: 'Неверный ключ' });
-  }
-  db.run('DELETE FROM messages', (err) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, message: 'Все сообщения удалены' });
-  });
-});
-
 // Запуск сервера
 app.listen(port, () => {
-  console.log(`Сервер чата запущен на порту ${port}`);
+  console.log(`Сервер на Supabase запущен на порту ${port}`);
 });
